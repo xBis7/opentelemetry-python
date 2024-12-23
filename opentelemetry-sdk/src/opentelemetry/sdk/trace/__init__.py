@@ -1085,8 +1085,8 @@ class Tracer(trace_api.Tracer):
         set_status_on_exception: bool = True,
         end_on_exit: bool = True,
     ) -> Iterator[trace_api.Span]:
-        # xbis
-        logger.info("xbis")
+        logger.info("x: start_as_current_span")
+        print("x: start_as_current_span")
         span = self.start_span(
             name=name,
             context=context,
@@ -1116,6 +1116,8 @@ class Tracer(trace_api.Tracer):
         record_exception: bool = True,
         set_status_on_exception: bool = True,
     ) -> trace_api.Span:
+        logger.info("x: start_span")
+        print("x: start_span")
         parent_span_context = trace_api.get_current_span(
             context
         ).get_span_context()
