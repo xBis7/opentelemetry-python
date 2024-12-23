@@ -1085,6 +1085,8 @@ class Tracer(trace_api.Tracer):
         set_status_on_exception: bool = True,
         end_on_exit: bool = True,
     ) -> Iterator[trace_api.Span]:
+        # xbis
+        logger.info("xbis")
         span = self.start_span(
             name=name,
             context=context,
