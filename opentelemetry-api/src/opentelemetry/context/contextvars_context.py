@@ -35,10 +35,12 @@ class ContextVarsRuntimeContext(_RuntimeContext):
         Args:
             context: The Context to set.
         """
+        print(f"x: attach: {context}")
         return self._current_context.set(context)
 
     def get_current(self) -> Context:
         """Returns the current `Context` object."""
+        print("x: get_current")
         return self._current_context.get()
 
     def detach(self, token: object) -> None:
@@ -47,6 +49,7 @@ class ContextVarsRuntimeContext(_RuntimeContext):
         Args:
             token: A reference to a previous Context.
         """
+        print(f"x: detach: {token}")
         self._current_context.reset(token)  # type: ignore
 
 

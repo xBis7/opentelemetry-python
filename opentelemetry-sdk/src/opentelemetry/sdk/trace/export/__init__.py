@@ -37,6 +37,7 @@ from opentelemetry.sdk.environment_variables import (
     OTEL_BSP_SCHEDULE_DELAY,
 )
 from opentelemetry.sdk.trace import ReadableSpan, Span, SpanProcessor
+from opentelemetry.sdk.util import ThreadSafeDict
 from opentelemetry.util._once import Once
 
 _DEFAULT_SCHEDULE_DELAY_MILLIS = 5000
@@ -99,11 +100,12 @@ class SimpleSpanProcessor(SpanProcessor):
 
     def __init__(self, span_exporter: SpanExporter):
         self.span_exporter = span_exporter
+        self.active_spans = ThreadSafeDict()
 
     def on_start(
         self, span: Span, parent_context: typing.Optional[Context] = None
     ) -> None:
-        pass
+        self.active_spans.set(span.get_span_context().span_id, span)
 
     def on_end(self, span: ReadableSpan) -> None:
         if not span.context.trace_flags.sampled:
@@ -115,6 +117,7 @@ class SimpleSpanProcessor(SpanProcessor):
         except Exception:
             logger.exception("Exception while exporting Span.")
         detach(token)
+        self.active_spans.delete(span.get_span_context().span_id)
 
     def shutdown(self) -> None:
         self.span_exporter.shutdown()
@@ -123,6 +126,16 @@ class SimpleSpanProcessor(SpanProcessor):
         # pylint: disable=unused-argument
         return True
 
+    def periodic_export(self) -> None:
+        iterable_spans_copy = self.active_spans.get_all().items()
+        for span_id, span in iterable_spans_copy:
+            print(f"x: periodic_export: {span_id}, {span}")
+            # span._last_export_time = time_ns()
+            # TODO, add another check if the span still exists on the dict.
+            span._end_time = time_ns()
+
+        spans_sequence = self.active_spans.get_all().values()
+        self.span_exporter.export(spans_sequence)
 
 class _FlushRequest:
     """Represents a request for the BatchSpanProcessor to flush spans."""
@@ -377,6 +390,7 @@ class BatchSpanProcessor(SpanProcessor):
             self._export_batch()
 
     def force_flush(self, timeout_millis: int = None) -> bool:
+        print("x: here")
         if timeout_millis is None:
             timeout_millis = self.export_timeout_millis
 

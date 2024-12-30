@@ -137,6 +137,9 @@ class SpanProcessor:
             False if the timeout is exceeded, True otherwise.
         """
 
+    def periodic_export(self) -> None:
+        pass
+
 
 # Temporary fix until https://github.com/PyCQA/pylint/issues/4098 is resolved
 # pylint:disable=no-member
@@ -388,6 +391,7 @@ class ReadableSpan:
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
         instrumentation_scope: Optional[InstrumentationScope] = None,
+        last_export_time: Optional[int] = None,
     ) -> None:
         self._name = name
         self._context = context
@@ -397,6 +401,7 @@ class ReadableSpan:
         self._parent = parent
         self._start_time = start_time
         self._end_time = end_time
+        self._last_export_time = last_export_time
         self._attributes = attributes
         self._events = events
         self._links = links
@@ -452,6 +457,10 @@ class ReadableSpan:
         return self._end_time
 
     @property
+    def last_export_time(self) -> Optional[int]:
+        return self._last_export_time
+
+    @property
     def status(self) -> trace_api.Status:
         return self._status
 
@@ -495,6 +504,10 @@ class ReadableSpan:
         if self._end_time:
             end_time = util.ns_to_iso_str(self._end_time)
 
+        last_export_time = None
+        if self._last_export_time:
+            last_export_time = util.ns_to_iso_str(self._last_export_time)
+
         status = {
             "status_code": str(self._status.status_code.name),
         }
@@ -510,6 +523,7 @@ class ReadableSpan:
             "parent_id": parent_id,
             "start_time": start_time,
             "end_time": end_time,
+            "last_export_time": last_export_time,
             "status": status,
             "attributes": self._format_attributes(self._attributes),
             "events": self._format_events(self._events),
@@ -917,6 +931,7 @@ class Span(trace_api.Span, ReadableSpan):
             end_time=self._end_time,
             instrumentation_info=self._instrumentation_info,
             instrumentation_scope=self._instrumentation_scope,
+            last_export_time=self._last_export_time,
         )
 
     def start(

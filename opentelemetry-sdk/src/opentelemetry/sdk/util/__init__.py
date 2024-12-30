@@ -150,3 +150,33 @@ class BoundedDict(MutableMapping):
         for key, value in mapping.items():
             bounded_dict[key] = value
         return bounded_dict
+
+class ThreadSafeDict:
+    """Dictionary that uses a lock during operations, to ensure thread safety."""
+
+    def __init__(self):
+        self.sync_dict = {}
+        self.thread_lock = threading.Lock()
+
+    def set(self, key, value):
+        with self.thread_lock:
+            self.sync_dict[key] = value
+
+    def get(self, key):
+        with self.thread_lock:
+            return self.sync_dict.get(key)
+
+    def delete(self, key):
+        with self.thread_lock:
+            if key in self.sync_dict:
+                del self.sync_dict[key]
+
+    def clear(self):
+        with self.thread_lock:
+            self.sync_dict.clear()
+
+    def get_all(self):
+        with self.thread_lock:
+            # Return a copy to avoid exposing the internal dictionary.
+            return self.sync_dict.copy()
+
