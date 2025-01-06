@@ -138,6 +138,10 @@ class SpanProcessor:
         """
 
     def periodic_export(self) -> None:
+        """Run a loop that exports all active spans on an interval.
+
+        Default no-op impl.
+        """
         pass
 
 
@@ -391,7 +395,7 @@ class ReadableSpan:
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
         instrumentation_scope: Optional[InstrumentationScope] = None,
-        last_export_time: Optional[int] = None,
+        state: trace_api.SpanState = trace_api.SpanState.NOT_STARTED,
     ) -> None:
         self._name = name
         self._context = context
@@ -401,7 +405,6 @@ class ReadableSpan:
         self._parent = parent
         self._start_time = start_time
         self._end_time = end_time
-        self._last_export_time = last_export_time
         self._attributes = attributes
         self._events = events
         self._links = links
@@ -410,6 +413,7 @@ class ReadableSpan:
         else:
             self._resource = resource
         self._status = status
+        self._state = state
 
     @property
     def dropped_attributes(self) -> int:
@@ -457,8 +461,8 @@ class ReadableSpan:
         return self._end_time
 
     @property
-    def last_export_time(self) -> Optional[int]:
-        return self._last_export_time
+    def state(self) -> trace_api.SpanState:
+        return self._state
 
     @property
     def status(self) -> trace_api.Status:
@@ -504,10 +508,6 @@ class ReadableSpan:
         if self._end_time:
             end_time = util.ns_to_iso_str(self._end_time)
 
-        last_export_time = None
-        if self._last_export_time:
-            last_export_time = util.ns_to_iso_str(self._last_export_time)
-
         status = {
             "status_code": str(self._status.status_code.name),
         }
@@ -523,7 +523,7 @@ class ReadableSpan:
             "parent_id": parent_id,
             "start_time": start_time,
             "end_time": end_time,
-            "last_export_time": last_export_time,
+            "state": str(self.state),
             "status": status,
             "attributes": self._format_attributes(self._attributes),
             "events": self._format_events(self._events),
@@ -931,7 +931,7 @@ class Span(trace_api.Span, ReadableSpan):
             end_time=self._end_time,
             instrumentation_info=self._instrumentation_info,
             instrumentation_scope=self._instrumentation_scope,
-            last_export_time=self._last_export_time,
+            state=self._state,
         )
 
     def start(
@@ -940,24 +940,28 @@ class Span(trace_api.Span, ReadableSpan):
         parent_context: Optional[context_api.Context] = None,
     ) -> None:
         with self._lock:
-            if self._start_time is not None:
+            if self._state != trace_api.SpanState.NOT_STARTED:
                 logger.warning("Calling start() on a started span.")
                 return
             self._start_time = (
                 start_time if start_time is not None else time_ns()
             )
+            self._state = trace_api.SpanState.RUNNING
+            # self.set_attribute("span.state", str(self._state))
 
         self._span_processor.on_start(self, parent_context=parent_context)
 
     def end(self, end_time: Optional[int] = None) -> None:
         with self._lock:
-            if self._start_time is None:
+            if self._state == trace_api.SpanState.NOT_STARTED:
                 raise RuntimeError("Calling end() on a not started span.")
-            if self._end_time is not None:
+            if self._state == trace_api.SpanState.FINISHED:
                 logger.warning("Calling end() on an ended span.")
                 return
 
             self._end_time = end_time if end_time is not None else time_ns()
+            # self._state = trace_api.SpanState.FINISHED
+            # self.set_attribute("span.state", str(self._state))
 
         self._span_processor.on_end(self._readable_span())
 
@@ -1100,7 +1104,6 @@ class Tracer(trace_api.Tracer):
         set_status_on_exception: bool = True,
         end_on_exit: bool = True,
     ) -> Iterator[trace_api.Span]:
-        print("x: start_as_current_span")
         span = self.start_span(
             name=name,
             context=context,
@@ -1130,7 +1133,6 @@ class Tracer(trace_api.Tracer):
         record_exception: bool = True,
         set_status_on_exception: bool = True,
     ) -> trace_api.Span:
-        print("x: start_span")
         parent_span_context = trace_api.get_current_span(
             context
         ).get_span_context()

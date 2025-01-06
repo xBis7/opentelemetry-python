@@ -780,3 +780,22 @@ Default: 9464
 This is an experimental environment variable and the name of this variable and its behavior can
 change in a non-backwards compatible way.
 """
+
+OTEL_PERIODIC_EXPORT_ENABLED = "OTEL_PERIODIC_EXPORT_ENABLED"
+"""
+.. envvar:: OTEL_PERIODIC_EXPORT_ENABLED
+
+The :envvar:`OTEL_PERIODIC_EXPORT_ENABLED` environment variable allows users to
+enable/disable the periodic export of active spans.
+Default: False
+
+Note: Periodic export of active spans is experimental.
+"""
+
+OTEL_PERIODIC_EXPORT_SCHEDULE_DELAY = "OTEL_PERIODIC_EXPORT_SCHEDULE_DELAY"
+"""
+.. envvar:: OTEL_PERIODIC_EXPORT_SCHEDULE_DELAY
+
+The :envvar:`OTEL_PERIODIC_EXPORT_SCHEDULE_DELAY` represents the delay interval between two consecutive exports of the SpanProcessor periodic export.
+Default: 5000
+"""

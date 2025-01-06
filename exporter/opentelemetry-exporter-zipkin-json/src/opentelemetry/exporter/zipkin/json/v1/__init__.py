@@ -47,7 +47,6 @@ class JsonV1Encoder(JsonEncoder, V1Encoder):
 
     def _encode_span(self, span: Span, encoded_local_endpoint: Dict) -> Dict:
         context = span.get_span_context()
-
         encoded_span = {
             "traceId": self._encode_trace_id(context.trace_id),
             "id": self._encode_span_id(context.span_id),

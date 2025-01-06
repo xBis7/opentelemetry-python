@@ -23,6 +23,8 @@ from os import environ, linesep
 from time import time_ns
 from typing import Optional
 
+from opentelemetry import trace as trace_api
+
 from opentelemetry.context import (
     _SUPPRESS_INSTRUMENTATION_KEY,
     Context,
@@ -35,6 +37,8 @@ from opentelemetry.sdk.environment_variables import (
     OTEL_BSP_MAX_EXPORT_BATCH_SIZE,
     OTEL_BSP_MAX_QUEUE_SIZE,
     OTEL_BSP_SCHEDULE_DELAY,
+    OTEL_PERIODIC_EXPORT_ENABLED,
+    OTEL_PERIODIC_EXPORT_SCHEDULE_DELAY,
 )
 from opentelemetry.sdk.trace import ReadableSpan, Span, SpanProcessor
 from opentelemetry.sdk.util import ThreadSafeDict
@@ -100,12 +104,26 @@ class SimpleSpanProcessor(SpanProcessor):
 
     def __init__(self, span_exporter: SpanExporter):
         self.span_exporter = span_exporter
+
+        self.is_periodic_export_enabled = (
+            bool(environ.get(OTEL_PERIODIC_EXPORT_ENABLED, "False"))
+        )
+        self.periodic_export_schedule_delay = (
+            int(environ.get(OTEL_PERIODIC_EXPORT_SCHEDULE_DELAY, _DEFAULT_SCHEDULE_DELAY_MILLIS))
+        )
+
         self.active_spans = ThreadSafeDict()
+
+        if self.is_periodic_export_enabled:
+            self._periodic_export_thread = threading.Thread(target=self.periodic_export, daemon=True)
+            self.condition = threading.Condition(threading.Lock())
+            self._periodic_export_thread.start()
 
     def on_start(
         self, span: Span, parent_context: typing.Optional[Context] = None
     ) -> None:
-        self.active_spans.set(span.get_span_context().span_id, span)
+        if self.is_periodic_export_enabled:
+            self.active_spans.set(span.get_span_context().span_id, span)
 
     def on_end(self, span: ReadableSpan) -> None:
         if not span.context.trace_flags.sampled:
@@ -117,7 +135,8 @@ class SimpleSpanProcessor(SpanProcessor):
         except Exception:
             logger.exception("Exception while exporting Span.")
         detach(token)
-        self.active_spans.delete(span.get_span_context().span_id)
+        if self.is_periodic_export_enabled:
+            self.active_spans.delete(span.get_span_context().span_id)
 
     def shutdown(self) -> None:
         self.span_exporter.shutdown()
@@ -127,15 +146,43 @@ class SimpleSpanProcessor(SpanProcessor):
         return True
 
     def periodic_export(self) -> None:
-        iterable_spans_copy = self.active_spans.get_all().items()
-        for span_id, span in iterable_spans_copy:
-            print(f"x: periodic_export: {span_id}, {span}")
-            # span._last_export_time = time_ns()
-            # TODO, add another check if the span still exists on the dict.
-            span._end_time = time_ns()
+        timeout = self.periodic_export_schedule_delay / 1e3
+        while True:
+            with self.condition:
+                print("periodic_export, new iteration")
+                iterable_spans_copy = self.active_spans.get_all().items()
+                if len(iterable_spans_copy) != 0:
 
-        spans_sequence = self.active_spans.get_all().values()
-        self.span_exporter.export(spans_sequence)
+                    export_time = time_ns()
+                    for span_id, span in iterable_spans_copy:
+                        print(f"periodic_export: {span_id}, {span}")
+
+                        span._state = trace_api.SpanState.RUNNING
+                        # span.set_attribute("span.state", str(span._state))
+                        span.add_event(
+                            name="state_running",
+                            attributes={
+                                "span.state": str(span._state),
+                            },
+                        )
+                        # TODO, add another check if the span still exists on the dict.
+                        span._end_time = export_time
+
+                    spans_sequence = self.active_spans.get_all().values()
+                    self.span_exporter.export(spans_sequence)
+
+                # In case, the export isn't frequent enough,
+                # there might be discrepancy between active spans and finished spans.
+                # It can be fixed, by exporting all active spans, on every export
+                # but this will also worsen performance.
+                # e.g.
+                #  - the result can be (until the next periodic export)
+                #      active_span |------
+                #      finished_span           |---|
+                #  - it should be
+                #      active_span |----------------
+                #      finished_span           |---|
+                self.condition.wait(timeout)
 
 class _FlushRequest:
     """Represents a request for the BatchSpanProcessor to flush spans."""
@@ -390,7 +437,6 @@ class BatchSpanProcessor(SpanProcessor):
             self._export_batch()
 
     def force_flush(self, timeout_millis: int = None) -> bool:
-        print("x: here")
         if timeout_millis is None:
             timeout_millis = self.export_timeout_millis
 

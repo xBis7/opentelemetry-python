@@ -187,6 +187,12 @@ class SpanKind(Enum):
     #: path latency relationship between producer and consumer spans.
     CONSUMER = 4
 
+class SpanState(str, Enum):
+    """Specifies additional details for the state of this span."""
+
+    NOT_STARTED = "not_started"
+    RUNNING = "running"
+    FINISHED = "finished"
 
 class TracerProvider(ABC):
     @abstractmethod
