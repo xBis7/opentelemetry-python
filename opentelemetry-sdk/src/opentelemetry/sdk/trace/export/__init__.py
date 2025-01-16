@@ -37,7 +37,7 @@ from opentelemetry.sdk.environment_variables import (
     OTEL_BSP_MAX_EXPORT_BATCH_SIZE,
     OTEL_BSP_MAX_QUEUE_SIZE,
     OTEL_BSP_SCHEDULE_DELAY,
-    OTEL_PERIODIC_EXPORT_ENABLED,
+    OTEL_TRACES_PARTIAL_ENABLED,
 )
 from opentelemetry.sdk.trace import ReadableSpan, Span, SpanProcessor
 from opentelemetry.sdk.util import ThreadSafeDict
@@ -206,8 +206,8 @@ class BatchSpanProcessor(SpanProcessor):
         if hasattr(os, "register_at_fork"):
             os.register_at_fork(after_in_child=self._at_fork_reinit)  # pylint: disable=protected-access
         self._pid = os.getpid()
-        self.is_periodic_export_enabled = (
-            bool(environ.get(OTEL_PERIODIC_EXPORT_ENABLED, "False"))
+        self.is_partial_trace_enabled = (
+            bool(environ.get(OTEL_TRACES_PARTIAL_ENABLED, "False"))
         )
 
         self.running_spans = ThreadSafeDict()
@@ -215,7 +215,7 @@ class BatchSpanProcessor(SpanProcessor):
     def on_start(
         self, span: Span, parent_context: typing.Optional[Context] = None
     ) -> None:
-        if self.is_periodic_export_enabled:
+        if self.is_partial_trace_enabled:
             self.running_spans.set(span.get_span_context().span_id, span)
 
     def on_end(self, span: ReadableSpan) -> None:
@@ -232,7 +232,7 @@ class BatchSpanProcessor(SpanProcessor):
                 logger.warning("Queue is full, likely spans will be dropped.")
                 self._spans_dropped = True
 
-        if self.is_periodic_export_enabled:
+        if self.is_partial_trace_enabled:
             self.running_spans.delete(span.get_span_context().span_id)
 
         self.queue.appendleft(span)
