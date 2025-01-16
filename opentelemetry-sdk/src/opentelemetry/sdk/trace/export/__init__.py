@@ -105,25 +105,10 @@ class SimpleSpanProcessor(SpanProcessor):
     def __init__(self, span_exporter: SpanExporter):
         self.span_exporter = span_exporter
 
-        self.is_periodic_export_enabled = (
-            bool(environ.get(OTEL_PERIODIC_EXPORT_ENABLED, "False"))
-        )
-        self.periodic_export_schedule_delay = (
-            int(environ.get(OTEL_PERIODIC_EXPORT_SCHEDULE_DELAY, _DEFAULT_SCHEDULE_DELAY_MILLIS))
-        )
-
-        self.active_spans = ThreadSafeDict()
-
-        if self.is_periodic_export_enabled:
-            self._periodic_export_thread = threading.Thread(target=self.periodic_export, daemon=True)
-            self.condition = threading.Condition(threading.Lock())
-            self._periodic_export_thread.start()
-
     def on_start(
         self, span: Span, parent_context: typing.Optional[Context] = None
     ) -> None:
-        if self.is_periodic_export_enabled:
-            self.active_spans.set(span.get_span_context().span_id, span)
+        pass
 
     def on_end(self, span: ReadableSpan) -> None:
         if not span.context.trace_flags.sampled:
@@ -135,8 +120,6 @@ class SimpleSpanProcessor(SpanProcessor):
         except Exception:
             logger.exception("Exception while exporting Span.")
         detach(token)
-        if self.is_periodic_export_enabled:
-            self.active_spans.delete(span.get_span_context().span_id)
 
     def shutdown(self) -> None:
         self.span_exporter.shutdown()
@@ -145,44 +128,6 @@ class SimpleSpanProcessor(SpanProcessor):
         # pylint: disable=unused-argument
         return True
 
-    def periodic_export(self) -> None:
-        timeout = self.periodic_export_schedule_delay / 1e3
-        while True:
-            with self.condition:
-                print("periodic_export, new iteration")
-                iterable_spans_copy = self.active_spans.get_all().items()
-                if len(iterable_spans_copy) != 0:
-
-                    export_time = time_ns()
-                    for span_id, span in iterable_spans_copy:
-                        print(f"periodic_export: {span_id}, {span}")
-
-                        span._state = trace_api.SpanState.RUNNING
-                        # span.set_attribute("span.state", str(span._state))
-                        span.add_event(
-                            name="state_running",
-                            attributes={
-                                "span.state": str(span._state),
-                            },
-                        )
-                        # TODO, add another check if the span still exists on the dict.
-                        span._end_time = export_time
-
-                    spans_sequence = self.active_spans.get_all().values()
-                    self.span_exporter.export(spans_sequence)
-
-                # In case, the export isn't frequent enough,
-                # there might be discrepancy between active spans and finished spans.
-                # It can be fixed, by exporting all active spans, on every export
-                # but this will also worsen performance.
-                # e.g.
-                #  - the result can be (until the next periodic export)
-                #      active_span |------
-                #      finished_span           |---|
-                #  - it should be
-                #      active_span |----------------
-                #      finished_span           |---|
-                self.condition.wait(timeout)
 
 class _FlushRequest:
     """Represents a request for the BatchSpanProcessor to flush spans."""
@@ -262,11 +207,17 @@ class BatchSpanProcessor(SpanProcessor):
         if hasattr(os, "register_at_fork"):
             os.register_at_fork(after_in_child=self._at_fork_reinit)  # pylint: disable=protected-access
         self._pid = os.getpid()
+        self.is_periodic_export_enabled = (
+            bool(environ.get(OTEL_PERIODIC_EXPORT_ENABLED, "False"))
+        )
+
+        self.running_spans = ThreadSafeDict()
 
     def on_start(
         self, span: Span, parent_context: typing.Optional[Context] = None
     ) -> None:
-        pass
+        if self.is_periodic_export_enabled:
+            self.running_spans.set(span.get_span_context().span_id, span)
 
     def on_end(self, span: ReadableSpan) -> None:
         if self.done:
@@ -283,6 +234,9 @@ class BatchSpanProcessor(SpanProcessor):
                 self._spans_dropped = True
 
         self.queue.appendleft(span)
+
+        if self.is_periodic_export_enabled:
+            self.running_spans.delete(span.get_span_context().span_id)
 
         if len(self.queue) >= self.max_export_batch_size:
             with self.condition:
@@ -305,6 +259,28 @@ class BatchSpanProcessor(SpanProcessor):
         flush_request = None  # type: typing.Optional[_FlushRequest]
         while not self.done:
             with self.condition:
+
+                # This check is needed in case, the worker thread runs
+                # before the running_spans dict has been initialized.
+                if not hasattr(self, 'running_spans'):
+                    iterable_spans_copy = []
+                else:
+                    # If the periodic export is disabled, then the dict will be empty and this will be skipped.
+                    iterable_spans_copy = self.running_spans.get_all().items()
+                if len(iterable_spans_copy) != 0:
+
+                    export_time = time_ns()
+                    for span_id, span in iterable_spans_copy:
+                        print(f"periodic_export: {span_id}, {span}")
+
+                        # The second check is to make sure that the span still exists in the dict.
+                        if span not in self.queue and self.running_spans.get(span_id) is not None:
+                            span._state = trace_api.SpanState.RUNNING
+
+                            span._end_time = export_time
+                            # Do we want to check if the queue has any room to accept the span?
+                            self.queue.append(span)
+
                 if self.done:
                     # done flag may have changed, avoid waiting
                     break

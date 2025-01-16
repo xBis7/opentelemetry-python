@@ -137,13 +137,6 @@ class SpanProcessor:
             False if the timeout is exceeded, True otherwise.
         """
 
-    def periodic_export(self) -> None:
-        """Run a loop that exports all active spans on an interval.
-
-        Default no-op impl.
-        """
-        pass
-
 
 # Temporary fix until https://github.com/PyCQA/pylint/issues/4098 is resolved
 # pylint:disable=no-member
@@ -947,7 +940,6 @@ class Span(trace_api.Span, ReadableSpan):
                 start_time if start_time is not None else time_ns()
             )
             self._state = trace_api.SpanState.RUNNING
-            # self.set_attribute("span.state", str(self._state))
 
         self._span_processor.on_start(self, parent_context=parent_context)
 
@@ -960,8 +952,8 @@ class Span(trace_api.Span, ReadableSpan):
                 return
 
             self._end_time = end_time if end_time is not None else time_ns()
-            # self._state = trace_api.SpanState.FINISHED
-            # self.set_attribute("span.state", str(self._state))
+            self._state = trace_api.SpanState.FINISHED
+            self.set_attribute("span.state", str(self._state))
 
         self._span_processor.on_end(self._readable_span())
 
