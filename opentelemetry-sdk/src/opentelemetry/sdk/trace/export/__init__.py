@@ -38,7 +38,6 @@ from opentelemetry.sdk.environment_variables import (
     OTEL_BSP_MAX_QUEUE_SIZE,
     OTEL_BSP_SCHEDULE_DELAY,
     OTEL_PERIODIC_EXPORT_ENABLED,
-    OTEL_PERIODIC_EXPORT_SCHEDULE_DELAY,
 )
 from opentelemetry.sdk.trace import ReadableSpan, Span, SpanProcessor
 from opentelemetry.sdk.util import ThreadSafeDict
