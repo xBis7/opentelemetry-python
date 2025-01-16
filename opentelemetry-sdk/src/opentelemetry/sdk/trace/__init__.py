@@ -952,8 +952,6 @@ class Span(trace_api.Span, ReadableSpan):
                 return
 
             self._end_time = end_time if end_time is not None else time_ns()
-            self._state = trace_api.SpanState.FINISHED
-            self.set_attribute("span.state", str(self._state))
 
         self._span_processor.on_end(self._readable_span())
 

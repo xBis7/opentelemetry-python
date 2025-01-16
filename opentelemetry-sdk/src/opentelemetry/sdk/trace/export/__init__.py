@@ -232,10 +232,10 @@ class BatchSpanProcessor(SpanProcessor):
                 logger.warning("Queue is full, likely spans will be dropped.")
                 self._spans_dropped = True
 
-        self.queue.appendleft(span)
-
         if self.is_periodic_export_enabled:
             self.running_spans.delete(span.get_span_context().span_id)
+
+        self.queue.appendleft(span)
 
         if len(self.queue) >= self.max_export_batch_size:
             with self.condition:
