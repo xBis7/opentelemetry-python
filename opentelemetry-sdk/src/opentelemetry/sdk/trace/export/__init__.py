@@ -37,7 +37,7 @@ from opentelemetry.sdk.environment_variables import (
     OTEL_BSP_MAX_EXPORT_BATCH_SIZE,
     OTEL_BSP_MAX_QUEUE_SIZE,
     OTEL_BSP_SCHEDULE_DELAY,
-    OTEL_TRACES_PARTIAL_ENABLED,
+    OTEL_BSP_PARTIAL_SPANS_ENABLED,
 )
 from opentelemetry.sdk.trace import ReadableSpan, Span, SpanProcessor
 from opentelemetry.sdk.util import ThreadSafeDict
@@ -207,7 +207,7 @@ class BatchSpanProcessor(SpanProcessor):
             os.register_at_fork(after_in_child=self._at_fork_reinit)  # pylint: disable=protected-access
         self._pid = os.getpid()
         self.is_partial_trace_enabled = (
-            bool(environ.get(OTEL_TRACES_PARTIAL_ENABLED, "False"))
+            bool(environ.get(OTEL_BSP_PARTIAL_SPANS_ENABLED, "False"))
         )
 
         self.running_spans = ThreadSafeDict()

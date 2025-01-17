@@ -74,15 +74,6 @@ Invalid or unrecognized input is ignored,
 i.e. the SDK behaves as if OTEL_TRACES_SAMPLER_ARG is not set.
 """
 
-OTEL_TRACES_PARTIAL_ENABLED = "OTEL_TRACES_PARTIAL_ENABLED"
-"""
-.. envvar:: OTEL_TRACES_PARTIAL_ENABLED
-
-The :envvar:`OTEL_TRACES_PARTIAL_ENABLED` environment variable allows users to
-enable/disable the periodic export of partial(unfinished) spans.
-Default: False
-"""
-
 OTEL_BLRP_SCHEDULE_DELAY = "OTEL_BLRP_SCHEDULE_DELAY"
 """
 .. envvar:: OTEL_BLRP_SCHEDULE_DELAY
@@ -145,6 +136,15 @@ OTEL_BSP_MAX_EXPORT_BATCH_SIZE = "OTEL_BSP_MAX_EXPORT_BATCH_SIZE"
 
 The :envvar:`OTEL_BSP_MAX_EXPORT_BATCH_SIZE` represents the maximum batch size for the data export of the BatchSpanProcessor.
 Default: 512
+"""
+
+OTEL_BSP_PARTIAL_SPANS_ENABLED = "OTEL_BSP_PARTIAL_SPANS_ENABLED"
+"""
+.. envvar:: OTEL_BSP_PARTIAL_SPANS_ENABLED
+
+The :envvar:`OTEL_BSP_PARTIAL_SPANS_ENABLED` environment variable allows users to
+enable/disable the periodic export of partial(unfinished) spans.
+Default: False
 """
 
 OTEL_ATTRIBUTE_COUNT_LIMIT = "OTEL_ATTRIBUTE_COUNT_LIMIT"
